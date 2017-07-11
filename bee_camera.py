@@ -4,11 +4,14 @@ import time
 import os
 import io
 import cv2
-
+import pickle
+from sklearn import svm
+from sklearn.externals import joblib
+from compute_features import compute_features as _cf
 
 
 class BeeCamera(picamera.PiCamera):
-    def __init__(self, resolution=(640, 480), framerate=10,
+    def __init__(self, resolution=(1280, 960), framerate=10,
                  pre_event_time=60, post_event_time=60,
                  storage='/home/pi/Videos/', draw_rect=True,
                  bg_decay=0.1, bg_framerate=1, bg_images=10):
@@ -41,6 +44,7 @@ class BeeCamera(picamera.PiCamera):
             resolution = resolution,
             framerate = framerate
         )
+        self.zoom = (0.15, 0.3, .8, .95)
         
         # Set instance variables.
         self.video_buffer = picamera.PiCameraCircularIO(
@@ -329,11 +333,7 @@ class BumblebeeDetector(object):
         The parameters are used for the OpenCV blob detector. Standard
         values are used if set to None.
         """
-
-
-        
         blob_params = cv2.SimpleBlobDetector_Params()
-
         
         blob_params.filterByArea = filter_area if filter_area is not None else blob_params.filterByArea
         blob_params.minArea = min_area if min_area is not None else blob_params.minArea
@@ -352,7 +352,11 @@ class BumblebeeDetector(object):
 
 	self.detector = cv2.SimpleBlobDetector(blob_params)
 
-    def detect(self, frame, bg, draw_rectangles=True):
+	
+	# Load classifier object
+	self.classifier = pickle.load(open('svm.ml', 'rb'))
+
+    def detect(self, frame, thresh=50, draw_rectangles=True):
         """Check whether or not a bumblebee is in given frame.
 
         Parameters
@@ -364,18 +368,16 @@ class BumblebeeDetector(object):
         draw_rectangles : bool
           Wether or not to draw rectangles around the detected bumblebees.
         """
-        err = (frame - bg)**2
-        err *= 255./np.max(err)
         th_err = cv2.threshold(
-            src = err.mean(axis=2).astype(np.uint8),
-            thresh = 0,
+            src = frame.mean(axis=2).astype(np.uint8),
+            thresh = thresh,
             maxval = 255,
-            type = cv2.THRESH_BINARY+cv2.THRESH_OTSU
+            type = cv2.THRESH_BINARY_INV
         )[1]
 
         # Find blobs:
         keypoints = self.detector.detect(th_err)
-        th_err2 = th_err.copy()
+        th_err2 = np.array(th_err)
 
         # Find ROI's
         mask = np.zeros(np.array(th_err.shape)+2, dtype=np.uint8)
@@ -390,20 +392,89 @@ class BumblebeeDetector(object):
 
         # Check if any of the ROIs contain a bumblebee
         return_val = False
+        rect_list = []
         for i in range(len(keypoints)):
             x_min = blobs[i, 0]
             x_max = x_min + blobs[i, 2]
             y_min = blobs[i, 1]
             y_max = y_min + blobs[i, 3]
-            roi = th_err[y_min:y_max, x_min:x_max]
+            roi = frame[y_min:y_max, x_min:x_max]
             if self.detect_single_bumblebee(roi):
                 if draw_rectangles:
-                    cv2.rectangle(frame, (x_min-3, y_min-3), (x_max+2, y_max+2), (255, 0, 0), 1)
+                    rect_list.append(((x_min-3, y_min-3), (x_max+2, y_max+2)))
                 return_val = True
 
+        # Draw rectangles
+        for rect in rect_list:
+            cv2.rectangle(frame, rect[0], rect[1], (255, 0, 0), 1)
         return return_val
+
 
     def detect_single_bumblebee(self, roi):
         """Check wether or not given ROI contains a single bumblebee.
         """
+        feats = self.compute_features(roi)
+        return self.classify(feats) >= 0
+
+
+    def compute_features(self, roi):
+        return _cf(roi)[0]
+    
+
+    def classify(self, data):
+        return self.classifier.coef_[0].dot(data) + self.classifier.intercept_[0]
+
+
+
+class TrainingSetGenerator(BumblebeeDetector):
+    def __init__(self, 
+                 filter_area=None, min_area=None, max_area=None,
+                 filter_circ=None, min_circ=None, max_circ=None,
+                 filter_convex=None, min_convex=None, max_convex=None):
+        """Initializer for the training set generator.
+        """
+        super(TrainingSetGenerator, self).__init__(
+            filter_area=None, min_area=None, max_area=None,
+            filter_circ=None, min_circ=None, max_circ=None,
+            filter_convex=None, min_convex=None, max_convex=None
+        )
+        blob_params = cv2.SimpleBlobDetector_Params()
+        
+        blob_params.filterByArea = filter_area if filter_area is not None else blob_params.filterByArea
+        blob_params.minArea = min_area if min_area is not None else blob_params.minArea
+        blob_params.maxArea = max_area if max_area is not None else blob_params.maxArea
+
+        blob_params.filterByCircularity = filter_circ if filter_circ is not None else blob_params.filterByCircularity
+        blob_params.minCircularity = min_circ if min_circ is not None else blob_params.minCircularity
+        blob_params.maxCircularity = max_circ if max_circ is not None else blob_params.maxCircularity
+
+        blob_params.filterByConvexity = filter_convex if filter_area is not None else blob_params.filterByConvexity
+        blob_params.minConvexity = min_convex if min_convex is not None else blob_params.minConvexity
+        blob_params.maxConvexity = max_convex if max_convex is not None else blob_params.maxConvexity
+
+        blob_params.filterByInertia = False
+        blob_params.filterByColor = False
+
+	self.detector = cv2.SimpleBlobDetector(blob_params)
+        self.blobs = []
+        self.features = []
+        self.classified = []
+        self.image_no = 0
+
+    def detect(self, frame, thresh=50, draw_rectangles=True):        
+        self.blobs.append([])
+        self.features.append([])
+        self.classified.append([])
+        return_val = super(TrainingSetGenerator, self).detect(frame, thresh, draw_rectangles)
+        self.image_no +=1
+        return return_val
+
+    def detect_single_bumblebee(self, roi):
+        feats = self.compute_features(roi)
+
+        self.features[self.image_no].append(feats)
+        self.blobs[self.image_no].append(roi)
+        self.classified[self.image_no].append(self.classify(feats))
         return True
+
+
