@@ -1,3 +1,6 @@
+import numpy as np
+
+
 # Normal mode if false, record test mode if True.
 record_test_footage = False 
 
@@ -14,7 +17,7 @@ post_event_time = 10
 space_tolerance = 0.95
 
 # Where to save footage
-footage_loc = '/home/pi/Bumblebees'
+footage_loc = '/home/pi/Bumblebees/'
 
 # Sense hat colours
 R = np.array([255, 0, 0])

@@ -21,8 +21,8 @@ def compute_features(blob):
 def detect(features):
     intercept = -0.73607911
     weights = np.array([ 0.68399413,
-                        2.11138001,
-                       -3.85304383,
-                        0.58279029,
-                       -0.94086196])
+                         2.11138001,
+                        -3.85304383,
+                         0.58279029,
+                        -0.94086196 ])
     return intercept + features.dot(weights) > 0

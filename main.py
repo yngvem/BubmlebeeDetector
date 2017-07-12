@@ -107,28 +107,33 @@ def record_test(key):
 def what_mode(key):
     global test_mode
     if key == keyboard.Key.left:
-        sense.show_message('Test footage')
+        sense.show_message('TM')
         test_mode = True
     elif key == keyboard.Key.right:
-        sense.show_message('Normal mode')
-        test_mode = True
+        sense.show_message('NM')
+        test_mode = False
     elif key == keyboard.Key.enter:
-        sense.show_mesage('Starting')
+        sense.show_message(':)')
         return False
 
 
 if __name__ == '__main__':
+    sense.set_pixels([W]*64)
+    print('Choose recording mode')
     with keyboard.Listener(on_press=what_mode) as listener:
         listener.join()
-
+    space = free_space()
+    show_fraction(space, sense)
     if test_mode == True:
+        print('Test mode')
         with keyboard.Listener(on_press=record_test) as listener:
             listener.join()
-
     else:
+        print('Normal mode')
         sense.set_pixels([R]*64)
         with BeeCamera() as camera:
-            camera.storage = footage_loc
+            print('Camera loaded')
+            camera.set_storage(footage_loc)
             camera.set_event_time(pre_event_time=pre_event_time, post_event_time=post_event_time)
 
             space = free_space()

@@ -4,14 +4,15 @@ import time
 import os
 import io
 import cv2
-from compute_features import compute_features, detect as _cf, _detect
+from compute_features import compute_features as _cf
+from compute_features import detect as _detect
 
 
 class BeeCamera(picamera.PiCamera):
     def __init__(self, resolution=(1280, 960), framerate=10,
                  pre_event_time=60, post_event_time=60,
                  storage='/home/pi/Videos/', draw_rect=True,
-                 bg_decay=0.1, bg_framerate=1, bg_images=10):
+                 bg_decay=0.1, bg_framerate=1, bg_images=1):
         """Wrapper for the picamera that detects bumblebees.
 
         Parameters
@@ -41,7 +42,7 @@ class BeeCamera(picamera.PiCamera):
             resolution = resolution,
             framerate = framerate
         )
-        self.zoom = (0.15, 0.3, .8, .95)
+        self.zoom = (0.15, 0.3, .8, .65)
         
         # Set instance variables.
         self.video_buffer = picamera.PiCameraCircularIO(
@@ -50,6 +51,8 @@ class BeeCamera(picamera.PiCamera):
         ) 
         self.background = self.create_background(bg_framerate, bg_images)
         self.storage = storage
+        if not os.path.exists(storage):
+            os.mkdir(storage)
         self.pre_event_time = pre_event_time
         self.post_event_time = post_event_time
         self.image = self.capture_image()
@@ -67,7 +70,12 @@ class BeeCamera(picamera.PiCamera):
             filter_circ=False,
             filter_convex=False
         )
-        
+
+
+    def set_storage(self, storage):
+        self.storage = storage
+        if not os.path.exists(storage):
+            os.mkdir(storage)
 
     def reset_video_buffer(self):
         """Create a new video buffer to record at.
@@ -192,7 +200,7 @@ class BeeCamera(picamera.PiCamera):
         if not os.path.exists(path):
             os.mkdir(path)
         image = self.image if image is None else image
-        cv2.imwrite(path + name, image2.astype(np.uint8))
+        cv2.imwrite(path + name, image.astype(np.uint8))
         if printout:
             print('Saved image to: ' + path + name)
 
@@ -402,6 +410,7 @@ class BumblebeeDetector(object):
             y_max = y_min + blobs[i, 3]
             roi = frame[y_min:y_max, x_min:x_max]
             if self.detect_single_bumblebee(roi):
+                print('Detected bumblebee')
                 if draw_rectangles:
                     rect_list.append(((x_min-3, y_min-3), (x_max+2, y_max+2)))
                 return_val = True
@@ -412,8 +421,8 @@ class BumblebeeDetector(object):
         return return_val
 
 
-    def detect_single_bumblebee(self, roi):
-        """Check wether or not given ROI contains a single bumblebee.
+    def detect_single_bumblebee(self, blob):
+        """Check wether or not the given blob contains a single bumblebee.
         """
         return self.class_score(blob) >= 0
 
