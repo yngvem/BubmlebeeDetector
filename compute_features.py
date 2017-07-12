@@ -16,3 +16,13 @@ def compute_features(blob):
     hu4 = np.sqrt((moments['nu30'] + moments['nu12'])**2 + (moments['nu03'] + moments['nu21'])**2)
 
     return np.array([[float(edges)/area, hu1, hu2, hu3, hu4]])
+
+
+def detect(features):
+    intercept = -0.73607911
+    weights = array([ 0.68399413,
+                      2.11138001,
+                     -3.85304383,
+                      0.58279029,
+                     -0.94086196])
+    return intercept + features.dot(weights) > 0

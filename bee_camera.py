@@ -4,10 +4,7 @@ import time
 import os
 import io
 import cv2
-import pickle
-from sklearn import svm
-from sklearn.externals import joblib
-from compute_features import compute_features as _cf
+from compute_features import compute_features, detect as _cf, _detect
 
 
 class BeeCamera(picamera.PiCamera):
@@ -195,9 +192,6 @@ class BeeCamera(picamera.PiCamera):
         if not os.path.exists(path):
             os.mkdir(path)
         image = self.image if image is None else image
-        image2 = image.copy()
-        image2[:,:,0] = image[:,:,2]
-        image2[:,:,2] = image[:,:,0]
         cv2.imwrite(path + name, image2.astype(np.uint8))
         if printout:
             print('Saved image to: ' + path + name)
@@ -281,7 +275,6 @@ class BeeCamera(picamera.PiCamera):
         
         bumblebee_present = self.bumblebee_detector.detect(
             frame=self.image,
-            bg=self.background,
             draw_rectangles=self.draw_rect
         )
         
@@ -294,6 +287,7 @@ class BeeCamera(picamera.PiCamera):
             self.save_video(name=name_prefix+'_video.h264')
             self.save_image(name=name_prefix+'_image.jpg')
             self.new_background()
+
 
     def record_test_footage(self, sense=None):
         if not os.path.exists('test_no.dat'):
@@ -313,8 +307,19 @@ class BeeCamera(picamera.PiCamera):
         curr_time = time.time()
         for i in range(self.pre_event_time+self.post_event_time):
             self.update_image()
-            self.save_image(name='{:03d}_image.jpg'.format(i), folder='test_{:03d}_images/'.format(test_no), printout=False)
-            self.save_image(name='{:03d}_background.jpg'.format(i), folder='test_{:03d}_backgrounds/'.format(test_no), printout=False, image=self.background)
+            
+            self.save_image(
+                name='{:03d}_image.jpg'.format(i),
+                folder='test_{:03d}_images/'.format(test_no),
+                printout=False
+            )
+            self.save_image(
+                name='{:03d}_background.jpg'.format(i),
+                folder='test_{:03d}_backgrounds/'.format(test_no),
+                printout=False,
+                image=self.background
+            )
+            
             prev_time = curr_time
             curr_time = time.time()
             if curr_time - prev_time < 1:
@@ -352,9 +357,6 @@ class BumblebeeDetector(object):
 
 	self.detector = cv2.SimpleBlobDetector(blob_params)
 
-	
-	# Load classifier object
-	self.classifier = pickle.load(open('svm.ml', 'rb'))
 
     def detect(self, frame, thresh=50, draw_rectangles=True):
         """Check whether or not a bumblebee is in given frame.
@@ -413,17 +415,19 @@ class BumblebeeDetector(object):
     def detect_single_bumblebee(self, roi):
         """Check wether or not given ROI contains a single bumblebee.
         """
-        feats = self.compute_features(roi)
-        return self.classify(feats) >= 0
+        return self.class_score(blob) >= 0
 
 
-    def compute_features(self, roi):
+    def compute_features(self, blob):
+        """Compute the image features of given blob.
+        """
         return _cf(roi)[0]
     
 
-    def classify(self, data):
-        return self.classifier.coef_[0].dot(data) + self.classifier.intercept_[0]
-
+    def class_score(self, blob):
+        """Classify a blob.
+        """
+        return _detect(self.compute_features(blob))
 
 
 class TrainingSetGenerator(BumblebeeDetector):
