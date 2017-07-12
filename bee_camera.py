@@ -421,64 +421,12 @@ class BumblebeeDetector(object):
     def compute_features(self, blob):
         """Compute the image features of given blob.
         """
-        return _cf(roi)[0]
+        return _cf(blob)[0]
     
 
     def class_score(self, blob):
         """Classify a blob.
         """
         return _detect(self.compute_features(blob))
-
-
-class TrainingSetGenerator(BumblebeeDetector):
-    def __init__(self, 
-                 filter_area=None, min_area=None, max_area=None,
-                 filter_circ=None, min_circ=None, max_circ=None,
-                 filter_convex=None, min_convex=None, max_convex=None):
-        """Initializer for the training set generator.
-        """
-        super(TrainingSetGenerator, self).__init__(
-            filter_area=None, min_area=None, max_area=None,
-            filter_circ=None, min_circ=None, max_circ=None,
-            filter_convex=None, min_convex=None, max_convex=None
-        )
-        blob_params = cv2.SimpleBlobDetector_Params()
-        
-        blob_params.filterByArea = filter_area if filter_area is not None else blob_params.filterByArea
-        blob_params.minArea = min_area if min_area is not None else blob_params.minArea
-        blob_params.maxArea = max_area if max_area is not None else blob_params.maxArea
-
-        blob_params.filterByCircularity = filter_circ if filter_circ is not None else blob_params.filterByCircularity
-        blob_params.minCircularity = min_circ if min_circ is not None else blob_params.minCircularity
-        blob_params.maxCircularity = max_circ if max_circ is not None else blob_params.maxCircularity
-
-        blob_params.filterByConvexity = filter_convex if filter_area is not None else blob_params.filterByConvexity
-        blob_params.minConvexity = min_convex if min_convex is not None else blob_params.minConvexity
-        blob_params.maxConvexity = max_convex if max_convex is not None else blob_params.maxConvexity
-
-        blob_params.filterByInertia = False
-        blob_params.filterByColor = False
-
-	self.detector = cv2.SimpleBlobDetector(blob_params)
-        self.blobs = []
-        self.features = []
-        self.classified = []
-        self.image_no = 0
-
-    def detect(self, frame, thresh=50, draw_rectangles=True):        
-        self.blobs.append([])
-        self.features.append([])
-        self.classified.append([])
-        return_val = super(TrainingSetGenerator, self).detect(frame, thresh, draw_rectangles)
-        self.image_no +=1
-        return return_val
-
-    def detect_single_bumblebee(self, roi):
-        feats = self.compute_features(roi)
-
-        self.features[self.image_no].append(feats)
-        self.blobs[self.image_no].append(roi)
-        self.classified[self.image_no].append(self.classify(feats))
-        return True
 
 

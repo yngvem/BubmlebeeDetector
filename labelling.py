@@ -1,15 +1,111 @@
 import numpy as np
-import picamera
 import time
 import os
 import io
 import cv2
-from bee_camera import TrainingSetGenerator
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button
 import glob
+from compute_features import compute_features as _cf
+from compute_features import detect as _detect
+
+
+
+class TrainingSetGenerator(object):
+    def __init__(self, 
+                 filter_area=None, min_area=None, max_area=None,
+                 filter_circ=None, min_circ=None, max_circ=None,
+                 filter_convex=None, min_convex=None, max_convex=None):
+        """Initializer for the training set generator.
+        """
+        blob_params = cv2.SimpleBlobDetector_Params()
+        
+        blob_params.filterByArea = filter_area if filter_area is not None else blob_params.filterByArea
+        blob_params.minArea = min_area if min_area is not None else blob_params.minArea
+        blob_params.maxArea = max_area if max_area is not None else blob_params.maxArea
+
+        blob_params.filterByCircularity = filter_circ if filter_circ is not None else blob_params.filterByCircularity
+        blob_params.minCircularity = min_circ if min_circ is not None else blob_params.minCircularity
+        blob_params.maxCircularity = max_circ if max_circ is not None else blob_params.maxCircularity
+
+        blob_params.filterByConvexity = filter_convex if filter_area is not None else blob_params.filterByConvexity
+        blob_params.minConvexity = min_convex if min_convex is not None else blob_params.minConvexity
+        blob_params.maxConvexity = max_convex if max_convex is not None else blob_params.maxConvexity
+
+        blob_params.filterByInertia = False
+        blob_params.filterByColor = False
+
+        self.detector = cv2.SimpleBlobDetector(blob_params)
+        self.blobs = []
+        self.features = []
+        self.scores = []
+        self.image_no = 0
+
+    def detect(self, frame, thresh=50, draw_rectangles=True):
+        # Update data lists    
+        self.blobs.append([])
+        self.features.append([])
+        self.scores.append([])
+
+        th_err = cv2.threshold(
+            src = frame.mean(axis=2).astype(np.uint8),
+            thresh = thresh,
+            maxval = 255,
+            type = cv2.THRESH_BINARY_INV
+        )[1]
+
+        # Find blobs:
+        keypoints = self.detector.detect(th_err)
+        th_err2 = np.array(th_err)
+
+        # Find ROI's
+        mask = np.zeros(np.array(th_err.shape)+2, dtype=np.uint8)
+        blobs = [0]*len(keypoints)
+        areas = [0]*len(keypoints)
+        for i, k in enumerate(keypoints):
+            x = int(k.pt[0])
+            y = int(k.pt[1])
+            areas[i], blobs[i] = cv2.floodFill(th_err2, mask*0, (x, y), i+1)
+
+        blobs = np.array(blobs)
+
+        # Check if any of the ROIs contain a bumblebee
+        rect_list = []
+        for i in range(len(keypoints)):
+            x_min = blobs[i, 0]
+            x_max = x_min + blobs[i, 2]
+            y_min = blobs[i, 1]
+            y_max = y_min + blobs[i, 3]
+            roi = frame[y_min:y_max, x_min:x_max]
+            feats = self.compute_features(roi)
+            self.features[self.image_no].append(feats)
+            self.blobs[self.image_no].append(roi)
+            self.scores[self.image_no].append(self.class_score(roi))
+            rect_list.append(((x_min-3, y_min-3), (x_max+2, y_max+2)))
+
+        # Draw rectangles
+        for rect in rect_list:
+            cv2.rectangle(frame, rect[0], rect[1], (255, 0, 0), 1)
+
+
+        self.image_no +=1
+        return True
+
+    def compute_features(self, blob):
+        """Compute the image features of given blob.
+        """
+        return _cf(blob)[0]
+    
+
+    def class_score(self, blob):
+        """Classify a blob.
+        """
+        return _detect(self.compute_features(blob))
+
+    
+
 
 
 class Labeller(object):
@@ -80,7 +176,10 @@ class Labeller(object):
             self.image_no += 1
         else:
             self.blob_no += 1
-        self.update_plot()
+        if self.image_no >= len(self.all_blobs):
+            plt.close('all')
+        else:
+            self.update_plot()
 
 
     def curr_bee(self, event):
@@ -139,6 +238,7 @@ class Labeller(object):
         print('Saved labelled blobs')
           
         
+
 if __name__ == '__main__':
     file_loc = raw_input('Folder with images to load: \n')
     file_loc += '/'

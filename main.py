@@ -6,21 +6,15 @@ import cv2
 import io
 import os
 import time
+from pynput import keyboard
 from bee_camera import BeeCamera
 from sense_hat import SenseHat
 from collections import OrderedDict
+from record_params import *
 
 
-space_tolerance = 0.95 # What storage load to stop recording at
-
-R = np.array([255, 0, 0])
-G = np.array([0, 255, 0])
-B = np.array([0, 0, 255])
-W = np.array([255, 255, 255])
-Bk = np.array([0, 0, 0])
-C = G+B
-M = R+B
-Y = (R + 0.7*G).astype(int)
+sense = SenseHat()
+test_mode = False
 
 def set_leds(colour_dict, sense_hat):
     """Sets the colour of the sense hat's led display
@@ -60,26 +54,92 @@ def show_fraction(fraction, sense_hat):
     set_leds(colour_dict, sense_hat)
 
 
+def record_test(key):
+    global record_time
+    
+    if key == keyboard.Key.enter:
+        if free_space() < space_tolerance:
+            print('Recording test footage')
+            sense.set_pixels([W]*64)
+            camera.record_test_footage(sense)
+            print('Finished recording')
+        elif key == keyboard.Key.up:
+            record_time += 10
+            camera.set_event_time(
+                pre_event_time=record_time/2,
+                post_event_time=record_time/2
+            )
+            sense.show_message(str(record_time))
+        else:
+            sense.show_message('Full SD card.')
+    elif key == keyboard.Key.down:
+        record_time -= 10
+        if record_time < 10:
+            record_time = 10
+        camera.set_event_time(
+            pre_event_time=record_time/2,
+            post_event_time=record_time/2
+        )
+        sense.show_message(str(record_time))
+    elif key == keyboard.Key.left:
+        record_time -= 60
+        if record_time < 10:
+            record_time = 10
+        camera.set_event_time(
+            pre_event_time=record_time/2,
+            post_event_time=record_time/2
+        )
+        sense.show_message(str(record_time))
+    elif key == keyboard.Key.right:
+        record_time += 60
+        camera.set_event_time(
+            pre_event_time=record_time/2,
+            post_event_time=record_time/2
+        )
+        sense.show_message(str(record_time))
+    elif key == keyboard.Key.esc:
+        sense.set_pixels([O]*64)
+        return False
+    space = free_space()
+    show_fraction(space, sense)
+
+
+def what_mode(key):
+    global test_mode
+    if key == keyboard.Key.left:
+        sense.show_message('Test footage')
+        test_mode = True
+    elif key == keyboard.Key.right:
+        sense.show_message('Normal mode')
+        test_mode = True
+    elif key == keyboard.Key.enter:
+        sense.show_mesage('Starting')
+        return False
+
+
 if __name__ == '__main__':
-    sense = SenseHat()
-    sense.set_pixels([R]*64)
-    with BeeCamera() as camera:
-        camera.storage = '/home/pi/Bumblebees'
-        camera.set_event_time(pre_event_time=60, post_event_time=60)
+    with keyboard.Listener(on_press=what_mode) as listener:
+        listener.join()
 
-        space = free_space()
-        curr_time = time.time()
-        while(space < space_tolerance):
-            show_fraction(space, sense)
-            prev_time = curr_time
-            curr_time = time.time()
-            if curr_time - prev_time < 0.5:
-                time.sleep(0.5 - (curr_time - prev_time))
+    if test_mode == True:
+        with keyboard.Listener(on_press=record_test) as listener:
+            listener.join()
 
-            camera.detect_bumblebee()
+    else:
+        sense.set_pixels([R]*64)
+        with BeeCamera() as camera:
+            camera.storage = footage_loc
+            camera.set_event_time(pre_event_time=pre_event_time, post_event_time=post_event_time)
+
             space = free_space()
+            curr_time = time.time()
+            while(space < space_tolerance):
+                show_fraction(space, sense)
+                prev_time = curr_time
+                curr_time = time.time()
+                if curr_time - prev_time < 0.5:
+                    time.sleep(0.5 - (curr_time - prev_time))
 
-        
-        
-        
+                camera.detect_bumblebee()
+                space = free_space()
         
