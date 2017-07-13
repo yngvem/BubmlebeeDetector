@@ -138,7 +138,7 @@ class Labeller(object):
 
         for i, image in enumerate(images):
             self.tg.detect(image, draw_rectangles=False)
-            print('Found blobs {} images out of {}'.format(i, images.shape[0]))
+            print('Found blobs {} images out of {}'.format(i+1, images.shape[0]))
         
         self.images = images
         self.all_blobs = self.tg.blobs
@@ -240,20 +240,23 @@ class Labeller(object):
         
 
 if __name__ == '__main__':
-    file_loc = raw_input('Folder with images to load: \n')
+    file_loc = raw_input('Folder with images to load (warning, this process will overwrite old files without warning!): \n')
     file_loc += '/'
     file_paths = sorted(glob.glob(file_loc + '*.jpg'))
 
-    load_total = int(raw_input('How many images to load (all images are loaded if this is 0): \n'))
-    load_total = len(file_paths) if load_total == 0 else load_total
-
+    load_total = raw_input('How many images to load (all images are loaded if this is left blank): \n')
+    load_total = int(load_total) if load_total != '' else len(file_paths)
+    
+    start_at = raw_input('Start at image no (starts at first image if this is left blank):')
+    start_at = int(start_at) if start_at != '' else 0
+    
     save_loc = raw_input('Folder to save data in (for folder this just press enter): \n')
     save_loc = '.' if save_loc == '' else save_loc
     
     im_shape = cv2.imread(file_paths[0]).shape
     shape = (load_total, im_shape[0], im_shape[1], 3)
     images = np.zeros(shape, dtype=np.uint8)
-    for i in range(load_total):
+    for i in range(start_at, load_total):
         file_path = file_loc + '{:03d}_image.jpg'.format(i)
         images[i, :, :] = cv2.imread(file_path)
         print('Loaded image {} of {}'.format(i+1, load_total))

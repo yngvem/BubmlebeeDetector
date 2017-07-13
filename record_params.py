@@ -2,7 +2,7 @@ import numpy as np
 
 
 # Normal mode if false, record test mode if True.
-record_test_footage = False 
+default_test = False
 
 # How long default test footage record time is.
 test_record_time = 180 

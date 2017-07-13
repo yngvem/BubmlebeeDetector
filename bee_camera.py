@@ -50,6 +50,8 @@ class BeeCamera(picamera.PiCamera):
             seconds = pre_event_time + post_event_time
         ) 
         self.background = self.create_background(bg_framerate, bg_images)
+        self.bg_framerate = bg_framerate
+        self.bg_images = bg_images
         self.storage = storage
         if not os.path.exists(storage):
             os.mkdir(storage)
@@ -294,7 +296,7 @@ class BeeCamera(picamera.PiCamera):
             self.wait_recording(self.post_event_time)
             self.save_video(name=name_prefix+'_video.h264')
             self.save_image(name=name_prefix+'_image.jpg')
-            self.new_background()
+            self.new_background(self.bg_framerate, self.bg_images)
 
 
     def record_test_footage(self, sense=None):

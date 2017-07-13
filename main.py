@@ -6,6 +6,7 @@ import cv2
 import io
 import os
 import time
+import sys
 from pynput import keyboard
 from bee_camera import BeeCamera
 from sense_hat import SenseHat
@@ -13,8 +14,10 @@ from collections import OrderedDict
 from record_params import *
 
 
+
 sense = SenseHat()
-test_mode = False
+test_mode = default_test
+
 
 def set_leds(colour_dict, sense_hat):
     """Sets the colour of the sense hat's led display
@@ -55,51 +58,50 @@ def show_fraction(fraction, sense_hat):
 
 
 def record_test(key):
-    global record_time
+    global test_record_time
     
     if key == keyboard.Key.enter:
         if free_space() < space_tolerance:
-            print('Recording test footage')
+            print('Recording test footage, should take {} seconds'
+                  .format(camera.pre_event_time+camera.post_event_time))
             sense.set_pixels([W]*64)
             camera.record_test_footage(sense)
             print('Finished recording')
-        elif key == keyboard.Key.up:
-            record_time += 10
-            camera.set_event_time(
-                pre_event_time=record_time/2,
-                post_event_time=record_time/2
-            )
-            sense.show_message(str(record_time))
         else:
             sense.show_message('Full SD card.')
+    elif key == keyboard.Key.up:
+        test_record_time += 10
+        camera.set_event_time(
+            pre_event_time=test_record_time/2,
+            post_event_time=test_record_time/2
+        )
     elif key == keyboard.Key.down:
-        record_time -= 10
-        if record_time < 10:
-            record_time = 10
-        camera.set_event_time(
-            pre_event_time=record_time/2,
-            post_event_time=record_time/2
-        )
-        sense.show_message(str(record_time))
+        test_record_time -= 10
+        if test_record_time < 10:
+            test_record_time = 10
+            camera.set_event_time(
+                pre_event_time=test_record_time/2,
+                post_event_time=test_record_time/2
+            )
     elif key == keyboard.Key.left:
-        record_time -= 60
-        if record_time < 10:
-            record_time = 10
-        camera.set_event_time(
-            pre_event_time=record_time/2,
-            post_event_time=record_time/2
-        )
-        sense.show_message(str(record_time))
+        test_record_time -= 60
+        if test_record_time < 10:
+            test_record_time = 10
+            camera.set_event_time(
+                pre_event_time=test_record_time/2,
+                post_event_time=test_record_time/2
+            )
     elif key == keyboard.Key.right:
-        record_time += 60
+        test_record_time += 60
         camera.set_event_time(
-            pre_event_time=record_time/2,
-            post_event_time=record_time/2
+            pre_event_time=test_record_time/2,
+            post_event_time=test_record_time/2
         )
-        sense.show_message(str(record_time))
     elif key == keyboard.Key.esc:
-        sense.set_pixels([O]*64)
+        sense.set_pixels([Bk]*64)
         return False
+    sense.show_message(str(test_record_time))
+    print('Record time: {}'.format(test_record_time))
     space = free_space()
     show_fraction(space, sense)
 
@@ -108,13 +110,17 @@ def what_mode(key):
     global test_mode
     if key == keyboard.Key.left:
         sense.show_message('TM')
+        print('Test mode')
         test_mode = True
     elif key == keyboard.Key.right:
         sense.show_message('NM')
+        print('Normal mode')
         test_mode = False
     elif key == keyboard.Key.enter:
         sense.show_message(':)')
         return False
+    elif key == keyboard.Key.esc:
+        sys.exit()
 
 
 if __name__ == '__main__':
@@ -124,21 +130,27 @@ if __name__ == '__main__':
         listener.join()
     space = free_space()
     show_fraction(space, sense)
-    if test_mode == True:
-        print('Test mode')
-        with keyboard.Listener(on_press=record_test) as listener:
-            listener.join()
-    else:
-        print('Normal mode')
-        sense.set_pixels([R]*64)
-        with BeeCamera() as camera:
-            print('Camera loaded')
-            camera.set_storage(footage_loc)
+    with BeeCamera() as camera:
+        print('Camera loaded')
+        camera.set_storage(footage_loc)
+        if test_mode == True:
+            print('Test mode')
+            with keyboard.Listener(on_press=record_test) as listener:
+                listener.join()
+        else:
+            print('Normal mode')
+            sense.set_pixels([R]*64)
             camera.set_event_time(pre_event_time=pre_event_time, post_event_time=post_event_time)
 
             space = free_space()
             curr_time = time.time()
+            ten_its_time = curr_time
+            num_its = 0L
             while(space < space_tolerance):
+                if num_its % 10 == 0:
+                    print('Checked 10 frames, took {:02} seconds'.format(curr_time - ten_its_time))
+                    ten_its_time = curr_time
+                num_its += 1
                 show_fraction(space, sense)
                 prev_time = curr_time
                 curr_time = time.time()
