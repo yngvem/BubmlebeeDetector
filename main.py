@@ -16,7 +16,6 @@ from record_params import *
 
 
 sense = SenseHat()
-test_mode = default_test
 
 
 def set_leds(colour_dict, sense_hat):
@@ -107,15 +106,15 @@ def record_test(key):
 
 
 def what_mode(key):
-    global test_mode
+    global manual_mode
     if key == keyboard.Key.left:
-        sense.show_message('TM')
-        print('Test mode')
-        test_mode = True
+        sense.show_message('M')
+        print('Manual mode')
+        manual_mode = True
     elif key == keyboard.Key.right:
-        sense.show_message('NM')
+        sense.show_message('N')
         print('Normal mode')
-        test_mode = False
+        manual_mode = False
     elif key == keyboard.Key.enter:
         sense.show_message(':)')
         return False
@@ -124,17 +123,17 @@ def what_mode(key):
 
 
 if __name__ == '__main__':
-    sense.set_pixels([W]*64)
+    sense.set_pixels([Pu]*64)
     print('Choose recording mode')
     with keyboard.Listener(on_press=what_mode) as listener:
         listener.join()
     space = free_space()
     show_fraction(space, sense)
-    with BeeCamera() as camera:
+    with BeeCamera(threshold=blob_thresh, min_area=min_blob_size, max_area=max_blob_size) as camera:
         print('Camera loaded')
         camera.set_storage(footage_loc)
-        if test_mode == True:
-            print('Test mode')
+        if manual_mode:
+            print('Manual mode')
             with keyboard.Listener(on_press=record_test) as listener:
                 listener.join()
         else:

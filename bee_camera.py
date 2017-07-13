@@ -12,7 +12,8 @@ class BeeCamera(picamera.PiCamera):
     def __init__(self, resolution=(1280, 960), framerate=10,
                  pre_event_time=60, post_event_time=60,
                  storage='/home/pi/Videos/', draw_rect=True,
-                 bg_decay=0.1, bg_framerate=1, bg_images=1):
+                 bg_decay=0.1, bg_framerate=1, bg_images=1,
+                 threshold=50, min_area=10, max_area=10000):
         """Wrapper for the picamera that detects bumblebees.
 
         Parameters
@@ -59,6 +60,7 @@ class BeeCamera(picamera.PiCamera):
         self.post_event_time = post_event_time
         self.image = self.capture_image()
         self.draw_rect = draw_rect
+        self.thresh = threshold
 
         # Start video recording.
         self.start_recording(self.video_buffer, format='h264')
@@ -68,7 +70,8 @@ class BeeCamera(picamera.PiCamera):
         # Create object detector
 	self.bumblebee_detector = BumblebeeDetector(
             filter_area=True,
-            min_area=10,
+            min_area=min_area,
+            max_area=max_area,
             filter_circ=False,
             filter_convex=False
         )
@@ -131,7 +134,11 @@ class BeeCamera(picamera.PiCamera):
         stream = io.BytesIO()
         self.capture(stream, format='rgb', use_video_port=fast_capture)
         data = np.fromstring(stream.getvalue(), dtype=np.uint8)
-        return data.reshape(self.resolution[1], self.resolution[0], 3)
+        image = data.reshape(self.resolution[1], self.resolution[0], 3)
+        corrected_image = image.copy()
+        corrected_image[:,:,0] = image[:,:,2].copy()
+        corrected_image[:,:,2] = image[:,:,0].copy()
+        return corrected_image
 
 
     def update_image(self):
@@ -285,6 +292,7 @@ class BeeCamera(picamera.PiCamera):
         
         bumblebee_present = self.bumblebee_detector.detect(
             frame=self.image,
+            thresh=self.thresh,
             draw_rectangles=self.draw_rect
         )
         
@@ -309,6 +317,10 @@ class BeeCamera(picamera.PiCamera):
                 test_no = int(f.readline())+1
             with open('test_no.dat', 'w') as f:
                 f.write(str(test_no))
+                
+        if not os.path.exists(self.storage + '/test_{:03d}/'.format(test_no)):
+            os.mkdir(self.storage + 'test_{:03d}/'.format(test_no))
+            
         if sense is not None:
             W = [255, 255, 255]
             sense.show_message(str(test_no))
@@ -320,21 +332,20 @@ class BeeCamera(picamera.PiCamera):
             
             self.save_image(
                 name='{:03d}_image.jpg'.format(i),
-                folder='test_{:03d}_images/'.format(test_no),
+                folder='test_{:03d}/images/'.format(test_no),
                 printout=False
-            )
-            self.save_image(
-                name='{:03d}_background.jpg'.format(i),
-                folder='test_{:03d}_backgrounds/'.format(test_no),
-                printout=False,
-                image=self.background
             )
             
             prev_time = curr_time
             curr_time = time.time()
             if curr_time - prev_time < 1:
                 time.sleep(1 - (curr_time - prev_time))
-        self.save_video(name='test.h264', folder='test_{:03d}_videos/'.format(test_no), printout=False)
+        
+        self.save_video(
+            name='footage_{:03d}.h264'.format(test_no),
+            folder='test_{:03d}/videos/'.format(test_no),
+            printout=False
+        )
       
 
 

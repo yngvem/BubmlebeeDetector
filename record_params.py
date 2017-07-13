@@ -1,8 +1,15 @@
 import numpy as np
 
 
-# Normal mode if false, record test mode if True.
-default_test = False
+# Normal mode if false, manual mode if True.
+manual_mode = False
+
+# Threshold value for blob detection.
+blob_thresh = 50
+
+# Maximum and minimum size for detected blobs
+min_blob_size = 10
+max_blob_size = 1000
 
 # How long default test footage record time is.
 test_record_time = 180 
@@ -27,4 +34,5 @@ W = np.array([255, 255, 255])
 Bk = np.array([0, 0, 0])
 C = G+B
 M = R+B
+Pu = (0.5*R + 0.5*B).astype(int)
 Y = (R + 0.7*G).astype(int)

@@ -8,6 +8,7 @@ matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button
 import glob
+from record_params import *
 from compute_features import compute_features as _cf
 from compute_features import detect as _detect
 
@@ -109,7 +110,7 @@ class TrainingSetGenerator(object):
 
 
 class Labeller(object):
-    def __init__(self, images, path='', tg=None):
+    def __init__(self, images, path='', tg=None, thresh=50):
         self.fig1 = plt.figure()
         self.ax1 = self.fig1.add_subplot(111)
         self.fig2 = plt.figure()
@@ -137,7 +138,7 @@ class Labeller(object):
         ) if tg is None else tg
 
         for i, image in enumerate(images):
-            self.tg.detect(image, draw_rectangles=False)
+            self.tg.detect(image, draw_rectangles=False, thresh=thresh)
             print('Found blobs {} images out of {}'.format(i+1, images.shape[0]))
         
         self.images = images
@@ -157,17 +158,21 @@ class Labeller(object):
         image = self.images[self.image_no].copy()
         image[:, :, 0] = image[:, :, 2].copy()
         image[:, :, 2] = self.images[self.image_no][:, :, 0].copy()
+        
+        if len(self.all_blobs[self.image_no]) > 0:
+            blob = self.all_blobs[self.image_no][self.blob_no].copy()
+            blob[:, :, 0] = blob[:, :, 2].copy()
+            blob[:, :, 2] = self.all_blobs[self.image_no][self.blob_no][:, :, 0].copy()
 
-        blob = self.all_blobs[self.image_no][self.blob_no].copy()
-        blob[:, :, 0] = blob[:, :, 2].copy()
-        blob[:, :, 2] = self.all_blobs[self.image_no][self.blob_no][:, :, 0].copy()
-
-        self.ax1.clear()
-        self.ax1.imshow(image)
-        self.ax1.set_title('Image {}'.format(self.image_no))
-        self.ax2.clear()
-        self.ax2.imshow(blob)
-        self.ax2.set_title('Image {}, blob {}'.format(self.image_no, self.blob_no))
+            self.ax1.clear()
+            self.ax1.imshow(image)
+            self.ax1.set_title('Image {}'.format(self.image_no))
+            self.ax2.clear()
+            self.ax2.imshow(blob)
+            self.ax2.set_title('Image {}, blob {}'.format(self.image_no, self.blob_no))
+        else:
+            self.image_no += 1
+            self.update_plot()
 
 
     def next_label(self):
@@ -247,10 +252,11 @@ if __name__ == '__main__':
     load_total = raw_input('How many images to load (all images are loaded if this is left blank): \n')
     load_total = int(load_total) if load_total != '' else len(file_paths)
     
-    start_at = raw_input('Start at image no (starts at first image if this is left blank):')
+    start_at = raw_input('Start at image no (starts at first image if this is left blank): \n')
     start_at = int(start_at) if start_at != '' else 0
     
-    save_loc = raw_input('Folder to save data in (for folder this just press enter): \n')
+    save_loc = raw_input('Folder to save data in (for folder this just press enter)\n'
+                         ' Warning: this process will overwrite old files without warning! \n')
     save_loc = '.' if save_loc == '' else save_loc
     
     im_shape = cv2.imread(file_paths[0]).shape
@@ -261,6 +267,6 @@ if __name__ == '__main__':
         images[i, :, :] = cv2.imread(file_path)
         print('Loaded image {} of {}'.format(i+1, load_total))
 
-    labeller = Labeller(images, path=save_loc)
+    labeller = Labeller(images, path=save_loc, thresh=blob_thresh)
     labeller.start_labelling()
     
